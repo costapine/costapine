@@ -145,12 +145,57 @@ jobs:
 
       - name: Build Custom Live Initramfs
         run: |
-          mkdir -p ${{ github.workspace }}/build/iso_root/boot
-          mkdir -p /tmp/initramfs_tmp/bin /tmp/initramfs_tmp/sbin /tmp/initramfs_tmp/etc /tmp/initramfs_tmp/proc /tmp/initramfs_tmp/sys /tmp/initramfs_tmp/dev /tmp/initramfs_tmp/mnt
-          cp iso/initramfs/init /tmp/initramfs_tmp/init
-          chmod +x /tmp/initramfs_tmp/init
-          (cd /tmp/initramfs_tmp && find . -print0 | cpio --null -ov --format=newc | gzip -9 > ${{ github.workspace }}/build/iso_root/boot/initramfs-costapine) || \
-          (cd /tmp/initramfs_tmp && find . | cpio -ov -H newc | gzip -9 > ${{ github.workspace }}/build/iso_root/boot/initramfs-costapine)
+          sudo mkdir -p ${{ github.workspace }}/build/iso_root/boot
+          INIT_STAGE_DIR="${{ github.workspace }}/build/rootfs/tmp/initramfs_tmp"
+          sudo mkdir -p "$INIT_STAGE_DIR"
+          sudo mkdir -p "$INIT_STAGE_DIR/bin" "$INIT_STAGE_DIR/sbin" "$INIT_STAGE_DIR/etc" "$INIT_STAGE_DIR/proc" "$INIT_STAGE_DIR/sys" "$INIT_STAGE_DIR/dev" "$INIT_STAGE_DIR/mnt" "$INIT_STAGE_DIR/lib"
+          
+          sudo cp ${{ github.workspace }}/build/rootfs/bin/busybox "$INIT_STAGE_DIR/bin/busybox"
+          sudo ln -sf busybox "$INIT_STAGE_DIR/bin/sh"
+          
+          sudo cp ${{ github.workspace }}/build/rootfs/lib/libc.musl-x86_64.so.1 "$INIT_STAGE_DIR/lib/libc.musl-x86_64.so.1"
+          sudo ln -sf libc.musl-x86_64.so.1 "$INIT_STAGE_DIR/lib/ld-musl-x86_64.so.1"
+          
+          KERNEL_VERSION=$(ls ${{ github.workspace }}/build/rootfs/lib/modules | head -n 1)
+          echo "Kernel version found: $KERNEL_VERSION"
+          sudo mkdir -p "$INIT_STAGE_DIR/lib/modules/$KERNEL_VERSION"
+          
+          MODULE_SRC="${{ github.workspace }}/build/rootfs/lib/modules/$KERNEL_VERSION"
+          for path in \
+              kernel/drivers/block/loop.ko* \
+              kernel/fs/squashfs \
+              kernel/fs/overlayfs \
+              kernel/fs/overlay \
+              kernel/fs/isofs \
+              kernel/fs/nls/nls_cp437.ko* \
+              kernel/fs/nls/nls_iso8859-1.ko* \
+              kernel/fs/nls/nls_utf8.ko* \
+              kernel/drivers/cdrom \
+              kernel/drivers/scsi/sr_mod.ko* \
+              kernel/drivers/scsi/sd_mod.ko* \
+              kernel/drivers/scsi/scsi_mod.ko* \
+              kernel/drivers/scsi/sg.ko* \
+              kernel/drivers/ata \
+              kernel/drivers/usb/storage \
+              kernel/drivers/usb/host \
+              kernel/drivers/usb/common \
+              kernel/drivers/usb/core \
+              kernel/drivers/virtio ; do
+            if [ -e "$MODULE_SRC/$path" ]; then
+              sudo mkdir -p "$INIT_STAGE_DIR/lib/modules/$KERNEL_VERSION/$(dirname "$path")"
+              sudo cp -a "$MODULE_SRC/$path" "$INIT_STAGE_DIR/lib/modules/$KERNEL_VERSION/$path"
+            fi
+          done
+          
+          sudo chroot ${{ github.workspace }}/build/rootfs depmod -b /tmp/initramfs_tmp "$KERNEL_VERSION"
+          
+          sudo cp iso/initramfs/init "$INIT_STAGE_DIR/init"
+          sudo chmod +x "$INIT_STAGE_DIR/init"
+          
+          (cd "$INIT_STAGE_DIR" && sudo find . -print0 | sudo cpio --null -ov --format=newc | gzip -9 > ${{ github.workspace }}/build/iso_root/boot/initramfs-costapine) || \
+          (cd "$INIT_STAGE_DIR" && sudo find . | sudo cpio -ov -H newc | gzip -9 > ${{ github.workspace }}/build/iso_root/boot/initramfs-costapine)
+          
+          sudo rm -rf "$INIT_STAGE_DIR"
 
       - name: Prepare ISO Boot Directory
         run: |
