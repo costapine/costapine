@@ -70,6 +70,7 @@ ENTRYPOINT ["/bin/bash", "-c", "\
         rc-update add elogind default; \
         rc-update add sddm default; \
         rc-update add networkmanager default; \
+        rc-update add costapine-init default; \
     '; \
     \
     # Apply branding \

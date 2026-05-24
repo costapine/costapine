@@ -79,6 +79,7 @@ jobs:
           sudo chroot build/rootfs rc-update add elogind default
           sudo chroot build/rootfs rc-update add sddm default
           sudo chroot build/rootfs rc-update add networkmanager default
+          sudo chroot build/rootfs rc-update add costapine-init default
 
       - name: Configure User Accounts
         run: |
