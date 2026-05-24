@@ -91,11 +91,36 @@ jobs:
 
       - name: Configure Services
         run: |
+          # Core sysinit services
+          sudo chroot build/rootfs rc-update add devfs sysinit
+          sudo chroot build/rootfs rc-update add dmesg sysinit
+          sudo chroot build/rootfs rc-update add hwdrivers sysinit
+          sudo chroot build/rootfs rc-update add sysfs sysinit
+          sudo chroot build/rootfs rc-update add cgroups sysinit
+          sudo chroot build/rootfs rc-update add udev sysinit || true
+          sudo chroot build/rootfs rc-update add udev-trigger sysinit || true
+          
+          # Core boot services
+          sudo chroot build/rootfs rc-update add bootmisc boot
+          sudo chroot build/rootfs rc-update add hostname boot
+          sudo chroot build/rootfs rc-update add hwclock boot
+          sudo chroot build/rootfs rc-update add localmount boot
+          sudo chroot build/rootfs rc-update add loopback boot
+          sudo chroot build/rootfs rc-update add modules boot
+          sudo chroot build/rootfs rc-update add procfs boot
+          sudo chroot build/rootfs rc-update add root boot
+          sudo chroot build/rootfs rc-update add sysctl boot
+          
+          # Core default services
           sudo chroot build/rootfs rc-update add dbus default
           sudo chroot build/rootfs rc-update add elogind default
           sudo chroot build/rootfs rc-update add sddm default
           sudo chroot build/rootfs rc-update add networkmanager default
           sudo chroot build/rootfs rc-update add costapine-init default
+          
+          # Core shutdown services
+          sudo chroot build/rootfs rc-update add killprocs shutdown
+          sudo chroot build/rootfs rc-update add mount-ro shutdown
 
       - name: Configure User Accounts
         run: |
