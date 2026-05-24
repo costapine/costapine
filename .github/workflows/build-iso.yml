@@ -162,19 +162,14 @@ jobs:
           
           MODULE_SRC="${{ github.workspace }}/build/rootfs/lib/modules/$KERNEL_VERSION"
           for path in \
-              kernel/drivers/block/loop.ko* \
+              kernel/drivers/block \
               kernel/fs/squashfs \
               kernel/fs/overlayfs \
               kernel/fs/overlay \
               kernel/fs/isofs \
-              kernel/fs/nls/nls_cp437.ko* \
-              kernel/fs/nls/nls_iso8859-1.ko* \
-              kernel/fs/nls/nls_utf8.ko* \
+              kernel/fs/nls \
               kernel/drivers/cdrom \
-              kernel/drivers/scsi/sr_mod.ko* \
-              kernel/drivers/scsi/sd_mod.ko* \
-              kernel/drivers/scsi/scsi_mod.ko* \
-              kernel/drivers/scsi/sg.ko* \
+              kernel/drivers/scsi \
               kernel/drivers/ata \
               kernel/drivers/usb/storage \
               kernel/drivers/usb/host \
