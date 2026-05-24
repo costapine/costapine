@@ -1,0 +1,204 @@
+name: Build Costapine ISO
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  ALPINE_VERSION: "3.21"
+  ARCH: "x86_64"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Host Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xorriso \
+            squashfs-tools \
+            grub-efi-amd64-bin \
+            grub-pc-bin \
+            mtools \
+            syslinux-common \
+            isolinux \
+            dosfstools \
+            cpio \
+            rsync \
+            wget \
+            tar \
+            gzip
+
+      - name: Create Build Directories
+        run: |
+          mkdir -p build/rootfs build/iso_root output
+
+      - name: Bootstrap Alpine Rootfs
+        run: |
+          wget -q https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/apk-tools-static-2.14.6-r0.apk
+          tar -xzf apk-tools-static-2.14.6-r0.apk
+          sudo ./sbin/apk.static \
+            --repository https://dl-cdn.alpinelinux.org/alpine/v3.21/main \
+            --root build/rootfs \
+            --initdb \
+            --allow-untrusted \
+            add alpine-base apk-tools alpine-keys
+
+      - name: Configure Rootfs Repositories
+        run: |
+          sudo cp rootfs/overlay/etc/apk/repositories build/rootfs/etc/apk/repositories
+          sudo cp /etc/resolv.conf build/rootfs/etc/resolv.conf
+
+      - name: Install System Packages
+        run: |
+          for f in rootfs/packages/*.list; do
+            echo "Installing packages from $f"
+            pkgs=$(grep -v '^#' "$f" | grep -v '^$')
+            if [ -n "$pkgs" ]; then
+              sudo chroot build/rootfs apk add --no-cache $pkgs
+            fi
+          done
+
+      - name: Apply Rootfs Overlay
+        run: |
+          sudo cp -a rootfs/overlay/* build/rootfs/
+
+      - name: Configure Services
+        run: |
+          sudo chroot build/rootfs rc-update add dbus default
+          sudo chroot build/rootfs rc-update add elogind default
+          sudo chroot build/rootfs rc-update add sddm default
+          sudo chroot build/rootfs rc-update add networkmanager default
+
+      - name: Configure User Accounts
+        run: |
+          sudo chroot build/rootfs /bin/sh -c '
+            adduser -D -s /bin/bash -G wheel costapine
+            echo "costapine:costapine" | chpasswd
+            echo "root:costapine" | chpasswd
+            addgroup costapine video
+            addgroup costapine audio
+            addgroup costapine input
+          '
+
+      - name: Apply Desktop Branding
+        run: |
+          # JWM config
+          sudo mkdir -p build/rootfs/usr/share/jwm
+          sudo cp branding/jwm/*.jwmrc build/rootfs/usr/share/jwm/
+          sudo cp branding/jwm/autostart.sh build/rootfs/usr/share/jwm/autostart.sh
+          sudo chmod +x build/rootfs/usr/share/jwm/autostart.sh
+
+          # SDDM Theme
+          sudo mkdir -p build/rootfs/usr/share/sddm/themes/costapine-theme
+          sudo cp -a branding/sddm/costapine-theme/* build/rootfs/usr/share/sddm/themes/costapine-theme/
+
+          # Wallpaper & Icons
+          sudo mkdir -p build/rootfs/usr/share/backgrounds
+          sudo cp branding/wallpapers/costapine-default.png build/rootfs/usr/share/backgrounds/
+          sudo mkdir -p build/rootfs/usr/share/pixmaps
+          sudo cp branding/icons/costapine-logo.svg build/rootfs/usr/share/pixmaps/
+
+      - name: Install System Installer
+        run: |
+          sudo mkdir -p build/rootfs/usr/local/bin build/rootfs/usr/local/lib/costapine-installer
+          sudo cp installer/costapine-installer.sh build/rootfs/usr/local/bin/
+          sudo cp -a installer/lib/* build/rootfs/usr/local/lib/costapine-installer/
+          sudo chmod +x build/rootfs/usr/local/bin/costapine-installer.sh
+          sudo sed -i 's|SCRIPT_DIR="\$(cd "\$(dirname "\$0")" \&\& pwd)"|SCRIPT_DIR="/usr/local/lib/costapine-installer"|g' build/rootfs/usr/local/bin/costapine-installer.sh
+
+      - name: Cleanup Rootfs Cache
+        run: |
+          sudo rm -rf build/rootfs/var/cache/apk/*
+
+      - name: Create SquashFS Filesystem
+        run: |
+          sudo mkdir -p build/iso_root/live
+          sudo mksquashfs build/rootfs build/iso_root/live/filesystem.squashfs -comp xz -b 256K
+
+      - name: Build Custom Live Initramfs
+        run: |
+          mkdir -p /tmp/initramfs_tmp/bin /tmp/initramfs_tmp/sbin /tmp/initramfs_tmp/etc /tmp/initramfs_tmp/proc /tmp/initramfs_tmp/sys /tmp/initramfs_tmp/dev /tmp/initramfs_tmp/mnt
+          cp iso/initramfs/init /tmp/initramfs_tmp/init
+          chmod +x /tmp/initramfs_tmp/init
+          (cd /tmp/initramfs_tmp && find . -print0 | cpio --null -ov --format=newc | gzip -9 > ${{ github.workspace }}/build/iso_root/boot/initramfs-costapine) || \
+          (cd /tmp/initramfs_tmp && find . | cpio -ov -H newc | gzip -9 > ${{ github.workspace }}/build/iso_root/boot/initramfs-costapine)
+
+      - name: Prepare ISO Boot Directory
+        run: |
+          sudo mkdir -p build/iso_root/boot
+          sudo cp build/rootfs/boot/vmlinuz-lts build/iso_root/boot/vmlinuz-lts
+
+      - name: Configure Isolinux (BIOS Boot)
+        run: |
+          sudo mkdir -p build/iso_root/boot/isolinux
+          sudo cp iso/syslinux/isolinux.cfg build/iso_root/boot/isolinux/
+          sudo cp /usr/lib/syslinux/bios/isolinux.bin build/iso_root/boot/isolinux/
+          sudo cp /usr/lib/syslinux/bios/ldlinux.c32 build/iso_root/boot/isolinux/
+          sudo cp /usr/lib/syslinux/bios/libcom.c32 build/iso_root/boot/isolinux/ || true
+          sudo cp /usr/lib/syslinux/bios/libutil.c32 build/iso_root/boot/isolinux/ || true
+          sudo cp /usr/lib/syslinux/bios/vesamenu.c32 build/iso_root/boot/isolinux/ || true
+          sudo cp /usr/lib/syslinux/bios/reboot.c32 build/iso_root/boot/isolinux/ || true
+          sudo cp /usr/lib/syslinux/bios/poweroff.c32 build/iso_root/boot/isolinux/ || true
+          sudo cp branding/splash/costapine-splash.png build/iso_root/boot/isolinux/splash.png
+
+      - name: Configure GRUB (UEFI Boot)
+        run: |
+          sudo mkdir -p build/iso_root/boot/grub
+          sudo cp iso/grub/grub.cfg build/iso_root/boot/grub/grub.cfg
+          sudo grub-mkstandalone -d /usr/lib/grub/x86_64-efi -O x86_64-efi \
+            -o build/iso_root/boot/grub/BOOTX64.EFI \
+            "boot/grub/grub.cfg=iso/grub/grub-embed.cfg"
+
+          # Build FAT ESP image
+          mkdir -p /tmp/efi_img/EFI/BOOT
+          sudo cp build/iso_root/boot/grub/BOOTX64.EFI /tmp/efi_img/EFI/BOOT/BOOTX64.EFI
+          dd if=/dev/zero of=build/iso_root/boot/grub/efiboot.img bs=1M count=4
+          mkfs.vfat -F 12 -n 'ESP' build/iso_root/boot/grub/efiboot.img
+          mcopy -i build/iso_root/boot/grub/efiboot.img -s /tmp/efi_img/* ::/
+
+      - name: Generate Hybrid ISO
+        run: |
+          sudo xorriso -as mkisofs \
+            -iso-level 3 \
+            -full-iso9660-filenames \
+            -volid 'COSTAPINE' \
+            -eltorito-boot boot/isolinux/isolinux.bin \
+            -eltorito-catalog boot/isolinux/boot.cat \
+            -no-emul-boot -boot-load-size 4 -boot-info-table \
+            -eltorito-alt-boot \
+            -e boot/grub/efiboot.img \
+            -no-emul-boot \
+            -isohybrid-gpt-basdat \
+            -output output/costapine-x86_64.iso \
+            build/iso_root
+
+      - name: Generate Checksums
+        run: |
+          sha256sum output/costapine-x86_64.iso > output/costapine-x86_64.iso.sha256
+
+      - name: Upload ISO Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: costapine-iso
+          path: output/costapine-x86_64*
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            output/costapine-x86_64.iso
+            output/costapine-x86_64.iso.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

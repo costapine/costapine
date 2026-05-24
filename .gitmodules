@@ -1,0 +1,18 @@
+[submodule "rootfs"]
+	path = rootfs
+	url = https://github.com/costapine/costapine-rootfs.git
+[submodule "iso"]
+	path = iso
+	url = https://github.com/costapine/costapine-iso.git
+[submodule "installer"]
+	path = installer
+	url = https://github.com/costapine/costapine-installer.git
+[submodule "branding"]
+	path = branding
+	url = https://github.com/costapine/costapine-branding.git
+[submodule "kernel"]
+	path = kernel
+	url = https://github.com/costapine/costapine-kernel.git
+[submodule "docs"]
+	path = docs
+	url = https://github.com/costapine/costapine-docs.git
