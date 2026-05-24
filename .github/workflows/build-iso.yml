@@ -160,13 +160,18 @@ jobs:
         run: |
           sudo mkdir -p build/iso_root/boot/isolinux
           sudo cp iso/syslinux/isolinux.cfg build/iso_root/boot/isolinux/
-          sudo cp /usr/lib/syslinux/bios/isolinux.bin build/iso_root/boot/isolinux/
-          sudo cp /usr/lib/syslinux/bios/ldlinux.c32 build/iso_root/boot/isolinux/
-          sudo cp /usr/lib/syslinux/bios/libcom.c32 build/iso_root/boot/isolinux/ || true
-          sudo cp /usr/lib/syslinux/bios/libutil.c32 build/iso_root/boot/isolinux/ || true
-          sudo cp /usr/lib/syslinux/bios/vesamenu.c32 build/iso_root/boot/isolinux/ || true
-          sudo cp /usr/lib/syslinux/bios/reboot.c32 build/iso_root/boot/isolinux/ || true
-          sudo cp /usr/lib/syslinux/bios/poweroff.c32 build/iso_root/boot/isolinux/ || true
+          for f in isolinux.bin ldlinux.c32 libcom32.c32 libutil.c32 vesamenu.c32 reboot.c32 poweroff.c32; do
+            if [ -f "/usr/share/syslinux/$f" ]; then
+              sudo cp "/usr/share/syslinux/$f" build/iso_root/boot/isolinux/
+            elif [ -f "/usr/lib/syslinux/bios/$f" ]; then
+              sudo cp "/usr/lib/syslinux/bios/$f" build/iso_root/boot/isolinux/
+            elif [ -f "/usr/lib/syslinux/modules/bios/$f" ]; then
+              sudo cp "/usr/lib/syslinux/modules/bios/$f" build/iso_root/boot/isolinux/
+            else
+              echo "ERROR: Required syslinux file $f not found!"
+              exit 1
+            fi
+          done
           sudo cp branding/splash/costapine-splash.png build/iso_root/boot/isolinux/splash.png
 
       - name: Configure GRUB (UEFI Boot)
