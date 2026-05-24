@@ -1,5 +1,7 @@
 output/
 .packer/
+cache/
 *.swp
 *.bak
 *~
+

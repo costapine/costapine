@@ -4,9 +4,9 @@ all: iso
 
 iso:
 	@echo "Building Costapine ISO via Docker..."
-	mkdir -p output
+	mkdir -p output cache
 	docker build -t costapine-builder .
-	docker run --privileged -v $$(pwd)/output:/output costapine-builder
+	docker run --privileged -v $$(pwd)/output:/output -v $$(pwd)/cache:/cache costapine-builder
 
 clean:
 	@echo "Cleaning up outputs..."

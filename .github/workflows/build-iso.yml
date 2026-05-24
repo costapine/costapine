@@ -41,14 +41,24 @@ jobs:
 
       - name: Create Build Directories
         run: |
-          mkdir -p build/rootfs build/iso_root output
+          mkdir -p build/rootfs build/iso_root build/cache output
+
+      - name: Cache Alpine Packages
+        uses: actions/cache@v4
+        with:
+          path: build/cache
+          key: alpine-packages-${{ hashFiles('rootfs/packages/*.list') }}
+          restore-keys: |
+            alpine-packages-
 
       - name: Bootstrap Alpine Rootfs
         run: |
           wget -q https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/apk-tools-static-2.14.6-r0.apk
           tar -xzf apk-tools-static-2.14.6-r0.apk
           sudo ./sbin/apk.static \
-            --repository https://dl-cdn.alpinelinux.org/alpine/v3.21/main \
+            --repository http://dl-cdn.alpinelinux.org/alpine/v3.21/main \
+            --cache-dir build/cache \
+            --timeout 15 \
             --root build/rootfs \
             --initdb \
             --allow-untrusted \
@@ -61,13 +71,19 @@ jobs:
 
       - name: Install System Packages
         run: |
+          sudo mkdir -p build/rootfs/cache
+          sudo mount --bind build/cache build/rootfs/cache
+          # Pre-update package index inside rootfs using cache
+          sudo chroot build/rootfs apk update --cache-dir /cache --timeout 15
           for f in rootfs/packages/*.list; do
             echo "Installing packages from $f"
             pkgs=$(grep -v '^#' "$f" | grep -v '^$')
             if [ -n "$pkgs" ]; then
-              sudo chroot build/rootfs apk add --no-cache $pkgs
+              sudo chroot build/rootfs apk add --cache-dir /cache --timeout 15 $pkgs
             fi
           done
+          sudo umount build/rootfs/cache || true
+          sudo rm -rf build/rootfs/cache
 
       - name: Apply Rootfs Overlay
         run: |
@@ -129,6 +145,7 @@ jobs:
 
       - name: Build Custom Live Initramfs
         run: |
+          mkdir -p ${{ github.workspace }}/build/iso_root/boot
           mkdir -p /tmp/initramfs_tmp/bin /tmp/initramfs_tmp/sbin /tmp/initramfs_tmp/etc /tmp/initramfs_tmp/proc /tmp/initramfs_tmp/sys /tmp/initramfs_tmp/dev /tmp/initramfs_tmp/mnt
           cp iso/initramfs/init /tmp/initramfs_tmp/init
           chmod +x /tmp/initramfs_tmp/init
@@ -137,7 +154,6 @@ jobs:
 
       - name: Prepare ISO Boot Directory
         run: |
-          sudo mkdir -p build/iso_root/boot
           sudo cp build/rootfs/boot/vmlinuz-lts build/iso_root/boot/vmlinuz-lts
 
       - name: Configure Isolinux (BIOS Boot)
@@ -164,7 +180,7 @@ jobs:
           # Build FAT ESP image
           mkdir -p /tmp/efi_img/EFI/BOOT
           sudo cp build/iso_root/boot/grub/BOOTX64.EFI /tmp/efi_img/EFI/BOOT/BOOTX64.EFI
-          dd if=/dev/zero of=build/iso_root/boot/grub/efiboot.img bs=1M count=4
+          dd if=/dev/zero of=build/iso_root/boot/grub/efiboot.img bs=1M count=16
           mkfs.vfat -F 12 -n 'ESP' build/iso_root/boot/grub/efiboot.img
           mcopy -i build/iso_root/boot/grub/efiboot.img -s /tmp/efi_img/* ::/
 
