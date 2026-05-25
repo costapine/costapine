@@ -142,7 +142,6 @@ jobs:
           sudo mkdir -p build/rootfs/etc/skel/.config/rofi
           sudo mkdir -p build/rootfs/etc/skel/.config/dunst
           sudo mkdir -p build/rootfs/etc/skel/.config/alacritty
-          sudo mkdir -p build/rootfs/etc/skel/.config/nitrogen
           sudo mkdir -p build/rootfs/etc/skel/.config/gtk-3.0
           
           # Copy configurations to skeleton
@@ -155,7 +154,6 @@ jobs:
           sudo cp branding/rofi/tokyonight.rasi build/rootfs/etc/skel/.config/rofi/
           sudo cp branding/dunst/dunstrc build/rootfs/etc/skel/.config/dunst/
           sudo cp branding/alacritty/alacritty.toml build/rootfs/etc/skel/.config/alacritty/
-          sudo cp branding/nitrogen/*.cfg build/rootfs/etc/skel/.config/nitrogen/
           
           # GTK configs
           sudo cp branding/gtk/gtkrc-2.0 build/rootfs/etc/skel/.gtkrc-2.0
