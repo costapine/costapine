@@ -135,16 +135,36 @@ jobs:
 
       - name: Apply Desktop Branding
         run: |
-          # JWM config
-          sudo mkdir -p build/rootfs/usr/share/jwm
-          sudo cp branding/jwm/*.jwmrc build/rootfs/usr/share/jwm/
-          sudo cp branding/jwm/autostart.sh build/rootfs/usr/share/jwm/autostart.sh
-          sudo chmod +x build/rootfs/usr/share/jwm/autostart.sh
-
+          # Create skeleton .config subdirectories
+          sudo mkdir -p build/rootfs/etc/skel/.config/openbox
+          sudo mkdir -p build/rootfs/etc/skel/.config/polybar
+          sudo mkdir -p build/rootfs/etc/skel/.config/picom
+          sudo mkdir -p build/rootfs/etc/skel/.config/rofi
+          sudo mkdir -p build/rootfs/etc/skel/.config/dunst
+          sudo mkdir -p build/rootfs/etc/skel/.config/alacritty
+          sudo mkdir -p build/rootfs/etc/skel/.config/nitrogen
+          sudo mkdir -p build/rootfs/etc/skel/.config/gtk-3.0
+          
+          # Copy configurations to skeleton
+          sudo cp branding/openbox/rc.xml build/rootfs/etc/skel/.config/openbox/
+          sudo cp branding/openbox/autostart build/rootfs/etc/skel/.config/openbox/
+          sudo chmod +x build/rootfs/etc/skel/.config/openbox/autostart
+          
+          sudo cp branding/polybar/config.ini build/rootfs/etc/skel/.config/polybar/
+          sudo cp branding/picom/picom.conf build/rootfs/etc/skel/.config/picom/
+          sudo cp branding/rofi/tokyonight.rasi build/rootfs/etc/skel/.config/rofi/
+          sudo cp branding/dunst/dunstrc build/rootfs/etc/skel/.config/dunst/
+          sudo cp branding/alacritty/alacritty.toml build/rootfs/etc/skel/.config/alacritty/
+          sudo cp branding/nitrogen/*.cfg build/rootfs/etc/skel/.config/nitrogen/
+          
+          # GTK configs
+          sudo cp branding/gtk/gtkrc-2.0 build/rootfs/etc/skel/.gtkrc-2.0
+          sudo cp branding/gtk/settings.ini build/rootfs/etc/skel/.config/gtk-3.0/
+          
           # SDDM Theme
           sudo mkdir -p build/rootfs/usr/share/sddm/themes/costapine-theme
           sudo cp -a branding/sddm/costapine-theme/* build/rootfs/usr/share/sddm/themes/costapine-theme/
-
+          
           # Wallpaper & Icons
           sudo mkdir -p build/rootfs/usr/share/backgrounds
           sudo cp branding/wallpapers/costapine-default.png build/rootfs/usr/share/backgrounds/
